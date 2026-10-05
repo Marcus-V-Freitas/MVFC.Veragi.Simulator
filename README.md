@@ -60,7 +60,7 @@ MVFC.Veragi.Simulator/
 │   ├── MVFC.Veragi.Simulator.AppHost/      # Orquestração local com .NET Aspire e MongoDB
 │   ├── MVFC.Veragi.Simulator.WebhookWorker/# Receptor Minimal API leve que recebe webhooks e loga
 │   └── compose.yaml                   # Subida do MongoDB via Docker para execução sem Aspire
-├── tests/                             # 5 projetos de teste divididos por domínio (631 testes)
+├── tests/                             # 5 projetos de teste divididos por domínio (633 testes)
 ├── scripts/
 │   ├── 00-complete-flow.http          # Fluxo completo ponta a ponta (31 etapas)
 │   ├── cenarios/                      # 16 cenários de negócio automatizados (01 a 16)
