@@ -188,7 +188,11 @@ public sealed class ContractAgendaTests(SimulatorFixture fixture) : IClassFixtur
         using (var scope = _fixture.Factory.Services.CreateScope())
         {
             var deliveries = await scope.ServiceProvider.GetRequiredService<SimulatorDbContext>().Deliveries.Where(x => x.Kind == "schedule").ToListAsync();
-            deliveries.Count.Should().Be(2);
+            deliveries.Count.Should().Be(3);
+
+            deliveries.Should().ContainSingle(x =>
+                x.Payload.FromJson<ScheduleWebhookNotification>()!
+                    .DadosConsultaAgenda!.Credenciadoras![0].ArranjosPagamento![0].UnidadesRecebiveis![0].ValorLivre == 200m);
 
             var update = deliveries.Should().ContainSingle(x =>
                 x.Payload.FromJson<ScheduleWebhookNotification>()!
@@ -232,6 +236,66 @@ public sealed class ContractAgendaTests(SimulatorFixture fixture) : IClassFixtur
 
         using var scope = _fixture.Factory.Services.CreateScope();
         (await scope.ServiceProvider.GetRequiredService<SimulatorDbContext>().Deliveries.CountAsync(x => x.Kind == "schedule")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AutomaticAgendaUpdatePreservesPendingContractReservationAfterRestart()
+    {
+        // Arrange
+        var (agendaId, date) = await PrepareAsync();
+        var pending = await ContractAsync(600, date);
+        var active = await ContractAsync(200, date);
+        using (var scope = _fixture.Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SimulatorDbContext>();
+            var contracts = await db.Operations.Where(item => item.Kind == "contract").ToListAsync();
+            contracts.Single(item => item.ExternalReference == pending).CreatedAt = DateTime.UtcNow.AddSeconds(-2);
+            contracts.Single(item => item.ExternalReference == active).CreatedAt = DateTime.UtcNow.AddSeconds(-1);
+            await db.SaveChangesAsync();
+        }
+        await _fixture.Client.ConfigureScenarioAsync("contract-process", new SimulationScenarioRequest(MerchantCnpj: Cnpj, ContractStatuses: [ContractStatusType.PendingRegistration, ContractStatusType.Active]));
+
+        // Act
+        await _fixture.ProcessAsync("contract");
+
+        // Assert
+        (await UnitAsync(agendaId)).FreeAmount.Should().Be(200);
+        (await DetailsAsync(pending)).Status.Should().Be(ContractStatusType.PendingRegistration);
+        (await DetailsAsync(active)).DebtBalanceAmount.Should().Be(200);
+        await using var restarted = new SimulatorWebApplicationFactory(_fixture.ConnectionString, _fixture.DatabaseName);
+        using var client = restarted.CreateClient();
+        var persisted = await client.GetDataAsync<ScheduleQuery>(Root + "/schedules/query-requests/" + agendaId);
+        persisted.ScheduleQueryData!.Acquirers![0].PaymentArrangements![0].ReceivableUnits![0].FreeAmount.Should().Be(200);
+        (await client.PostAsync("/_simulator/schedules/" + agendaId + "/refresh", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var refreshed = await client.GetDataAsync<ScheduleQuery>(Root + "/schedules/query-requests/" + agendaId);
+        refreshed.ScheduleQueryData!.Acquirers.Should().BeEquivalentTo(persisted.ScheduleQueryData.Acquirers);
+    }
+
+    [Theory]
+    [InlineData(ContractStatusType.Cancelled)]
+    [InlineData(ContractStatusType.ContractSimulation)]
+    public async Task TerminalContractRestoresReservedAgendaAndPublishesRelease(ContractStatusType status)
+    {
+        // Arrange
+        var (originalAgendaId, date) = await PrepareAsync();
+        await ContractAsync(600, date);
+        var freshAgendaId = await SubmitAgendaAsync();
+        await _fixture.ProcessAsync("schedule");
+        (await UnitAsync(freshAgendaId)).FreeAmount.Should().Be(400);
+        await _fixture.Client.ConfigureScenarioAsync("contract-process", new SimulationScenarioRequest(MerchantCnpj: Cnpj, ContractStatuses: [status]));
+
+        // Act
+        await _fixture.ProcessAsync("contract");
+
+        // Assert
+        (await UnitAsync(freshAgendaId)).FreeAmount.Should().Be(1000);
+        using var scope = _fixture.Factory.Services.CreateScope();
+        var deliveries = await scope.ServiceProvider.GetRequiredService<SimulatorDbContext>().Deliveries.Where(item => item.Kind == "schedule").ToListAsync();
+        deliveries.Count(item => item.OperationId == Guid.Parse(originalAgendaId)).Should().Be(1);
+        var freshDeliveries = deliveries.Where(item => item.OperationId == Guid.Parse(freshAgendaId)).ToArray();
+        freshDeliveries.Should().HaveCount(2);
+        freshDeliveries.Select(item => item.Payload.FromJson<ScheduleWebhookNotification>()!.DadosConsultaAgenda!.Credenciadoras![0].ArranjosPagamento![0].UnidadesRecebiveis![0].ValorLivre).Should().BeEquivalentTo(new decimal?[] { 400, 1000 });
+        await ContractAsync(1000, date);
     }
 
     private async Task<(string InitialAgendaId, string SettlementDate)> PrepareAsync()

@@ -145,7 +145,9 @@ public sealed class ContractAvailabilityTests
 
         // Assert
         fixture.Operations.Single(operation => operation.Kind == "contract").Status.Should().Be(ScheduleQueryStatusType.ERROR);
-        fixture.Deliveries.Count(delivery => delivery.Kind == "schedule").Should().Be(1);
+        fixture.Deliveries.Count(delivery => delivery.Kind == "schedule").Should().Be(2);
+        var agenda = fixture.Operations.Single(operation => operation.Kind == "schedule").ResultJson.FromJson<ScheduleQuery>()!;
+        agenda.ScheduleQueryData!.Acquirers![0].PaymentArrangements![0].ReceivableUnits![0].FreeAmount.Should().Be(0);
     }
 
     [Fact]

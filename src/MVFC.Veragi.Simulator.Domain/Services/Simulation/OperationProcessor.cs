@@ -138,8 +138,8 @@ public sealed class OperationProcessor(
         operation.ResultJson = details.ToJson();
         await AddDeliveryAsync(operation, operation.ToContractWebhook(now).ToJson(), now, cancellationToken);
 
-        if (details.Status is ContractStatusType.Active or ContractStatusType.Settled && merchant?.IsDeleted == false)
-            await UpdateMerchantSchedulesAsync(merchant, now, cancellationToken);
+        if (details.Status is ContractStatusType.Active or ContractStatusType.Settled or ContractStatusType.Cancelled or ContractStatusType.ContractSimulation && merchant?.IsDeleted == false)
+            await UpdateMerchantSchedulesAsync(merchant, now, details.Status is ContractStatusType.Cancelled or ContractStatusType.ContractSimulation, cancellationToken);
     }
 
     public async Task<Result<bool>> RepublishScheduleAsync(Guid id, CancellationToken cancellationToken)
@@ -159,7 +159,7 @@ public sealed class OperationProcessor(
             return Failures.Missing("Merchant not found");
 
         var now = _clock.GetUtcNow().UtcDateTime;
-        await UpdateScheduleAsync(operation, merchant.Payload.FromJson<Merchant>()!, await _store.GetOperationsAsync("contract", merchant.Cnpj, cancellationToken), await _store.GetSalesAsync(merchant.Cnpj, cancellationToken), await _store.GetExternalAnticipationsAsync(merchant.Cnpj, cancellationToken), now, cancellationToken);
+        await UpdateScheduleAsync(operation, merchant.Payload.FromJson<Merchant>()!, await _store.GetOperationsAsync("contract", merchant.Cnpj, cancellationToken), await _store.GetSalesAsync(merchant.Cnpj, cancellationToken), await _store.GetExternalAnticipationsAsync(merchant.Cnpj, cancellationToken), now, false, cancellationToken);
         await _store.SaveAsync(cancellationToken);
 
         return true;
@@ -168,6 +168,7 @@ public sealed class OperationProcessor(
     private async Task UpdateMerchantSchedulesAsync(
         MerchantEntity merchant,
         DateTime now,
+        bool skipUnchanged,
         CancellationToken ct
     )
     {
@@ -176,13 +177,13 @@ public sealed class OperationProcessor(
         if (schedules.Length == 0)
             return;
 
-        var contracts = (await _store.GetOperationsAsync("contract", merchant.Cnpj, ct)).Where(x => x.Status != ScheduleQueryStatusType.PROCESSING).ToArray();
+        var contracts = await _store.GetOperationsAsync("contract", merchant.Cnpj, ct);
         var sales = await _store.GetSalesAsync(merchant.Cnpj, ct);
         var external = await _store.GetExternalAnticipationsAsync(merchant.Cnpj, ct);
         var payload = merchant.Payload.FromJson<Merchant>()!;
 
         foreach (var schedule in schedules)
-            await UpdateScheduleAsync(schedule, payload, contracts, sales, external, now, ct);
+            await UpdateScheduleAsync(schedule, payload, contracts, sales, external, now, skipUnchanged, ct);
     }
 
     private async Task UpdateScheduleAsync(
@@ -192,10 +193,15 @@ public sealed class OperationProcessor(
         IReadOnlyList<SimulatedSaleEntity> sales,
         IReadOnlyList<ExternalAnticipationEntity> external,
         DateTime now,
+        bool skipUnchanged,
         CancellationToken ct
     )
     {
         var result = new ScheduleQuery(Status: operation.Status, Detail: "Schedule updated", ScheduleQueryData: _generator.Generate(operation, merchant, contracts, sales, now, external));
+
+        if (skipUnchanged && operation.ResultJson.FromJson<ScheduleQuery>()!.ScheduleQueryData!.Acquirers.ToJson() == result.ScheduleQueryData!.Acquirers.ToJson())
+            return;
+
         operation.ResultJson = result.ToJson();
         await AddDeliveryAsync(operation, _options.ScheduleWebhookSchema == ScheduleWebhookSchema.ContractReceivables ? result.ToContractReceivablesWebhook().ToJson() : result.ToScheduleWebhook().ToJson(), now, ct);
     }
