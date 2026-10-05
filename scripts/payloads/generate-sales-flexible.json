@@ -1,0 +1,60 @@
+{
+  "sales": [
+    {
+      "externalId": "parcelada",
+      "acquirerCnpj": "{{selectedAcquirerA}}",
+      "paymentArrangementCode": "{{selectedArrangementA}}",
+      "installments": [
+        {
+          "amount": 5000,
+          "settlementBusinessDays": 5
+        },
+        {
+          "amount": 3000,
+          "settlementBusinessDays": 6
+        },
+        {
+          "amount": 2000,
+          "settlementBusinessDays": 7
+        }
+      ]
+    },
+    {
+      "externalId": "avista",
+      "acquirerCnpj": "{{selectedAcquirerA}}",
+      "paymentArrangementCode": "{{selectedArrangementB}}",
+      "installments": [
+        {
+          "amount": 10000,
+          "settlementBusinessDays": 5
+        }
+      ]
+    },
+    {
+      "externalId": "outra-credenciadora",
+      "acquirerCnpj": "{{selectedAcquirerB}}",
+      "paymentArrangementCode": "{{selectedArrangementA}}",
+      "installments": [
+        {
+          "amount": 7500,
+          "settlementBusinessDays": 5
+        }
+      ]
+    },
+    {
+      "externalId": "centavos",
+      "acquirerCnpj": "{{selectedAcquirerB}}",
+      "paymentArrangementCode": "{{selectedArrangementB}}",
+      "installments": [
+        {
+          "amount": 900.25,
+          "settlementBusinessDays": 5
+        },
+        {
+          "amount": 1800.5,
+          "settlementBusinessDays": 6
+        }
+      ]
+    }
+  ]
+}

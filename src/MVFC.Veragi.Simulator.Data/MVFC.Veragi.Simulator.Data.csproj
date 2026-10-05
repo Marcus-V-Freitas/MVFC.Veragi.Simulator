@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	
+	<ItemGroup>    
+	  <PackageReference Include="MongoDB.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../MVFC.Veragi.Simulator.Domain/MVFC.Veragi.Simulator.Domain.csproj" />
+	</ItemGroup>
+
+</Project>

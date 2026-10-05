@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	
+  <ItemGroup>
+    <PackageReference Include="Divino.OperationResult" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+</Project>

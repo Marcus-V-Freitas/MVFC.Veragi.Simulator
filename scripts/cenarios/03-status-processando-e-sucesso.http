@@ -1,0 +1,78 @@
+# @import ../common.http
+
+### Preparacao explicita - 01 - Cadastrar estabelecimento e definir escopo
+# @name merchant
+# @injectVariables
+{{
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+  exports.financierId = 'HTTP-' + Date.now();
+  exports.requestedAmount = 500;
+  exports.today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ../payloads/merchant.json
+
+?? status == 201
+
+### Preparacao explicita - 02 - Gerar vendas de forma independente; nao dispara webhook
+# @name generateSales
+# @injectVariables
+POST {{baseUrl}}/_simulator/merchants/{{cnpj}}/sales/generate
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/generate-sales.json
+
+?? status == 201
+
+### Preparar cadastro e vendas; proximo ciclo PROCESSING e depois PROCESSED
+# @injectVariables
+PUT {{baseUrl}}/_simulator/scenarios/schedule-process
+Content-Type: application/json
+
+{
+  "processingOutcomes": [
+    "PROCESSING",
+    "PROCESSED"
+  ]
+}
+
+?? status == 200
+
+### Preparacao explicita - 05 - Solicitar agenda; guardar requestId
+# @name submitSchedule
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule.json
+
+?? status == 202
+
+### Preparacao explicita - 06 - Aguardar scheduler ou antecipar processamento e entrega do webhook de agenda
+# @name processSchedule
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Executar primeiro ciclo e receber webhook intermediario
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSING
+
+### Executar segundo ciclo e receber webhook final
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Consulta deve estar processada
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSED
+
+

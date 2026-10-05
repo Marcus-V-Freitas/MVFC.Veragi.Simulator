@@ -1,0 +1,39 @@
+# @import ../common.http
+
+### Falhar nas proximas duas listagens; terceira volta ao normal
+PUT {{baseUrl}}/_simulator/scenarios/acquirers-list
+Content-Type: application/json
+
+{
+  "failuresRemaining": 2,
+  "failureStatusCode": 503
+}
+
+?? status == 200
+
+### Primeira falha
+GET {{root}}/bases-control/acquirers
+
+?? status == 503
+
+### Segunda falha
+GET {{root}}/bases-control/acquirers
+
+?? status == 503
+
+### Terceira chamada deve funcionar
+GET {{root}}/bases-control/acquirers
+
+?? status == 200
+
+### Inspecionar contador consumido
+GET {{baseUrl}}/_simulator/scenarios
+
+?? status == 200
+
+### Remover configuracao do alvo
+DELETE {{baseUrl}}/_simulator/scenarios/acquirers-list
+
+?? status == 200
+
+

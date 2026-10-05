@@ -1,0 +1,140 @@
+# @import ../common.http
+
+### Preparacao explicita - 01 - Cadastrar estabelecimento e definir escopo
+# @name merchant
+# @injectVariables
+{{
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+  exports.financierId = 'HTTP-' + Date.now();
+  exports.requestedAmount = 500;
+  exports.today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ../payloads/merchant.json
+
+?? status == 201
+
+### Preparacao explicita - 02 - Gerar vendas de forma independente; nao dispara webhook
+# @name generateSales
+# @injectVariables
+POST {{baseUrl}}/_simulator/merchants/{{cnpj}}/sales/generate
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/generate-sales.json
+
+?? status == 201
+
+### Preparacao explicita - 05 - Solicitar agenda; guardar requestId
+# @name submitSchedule
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule.json
+
+?? status == 202
+
+### Preparacao explicita - 06 - Aguardar scheduler ou antecipar processamento e entrega do webhook de agenda
+# @name processSchedule
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Preparacao explicita - 08 - Consultar explicitamente a agenda solicitada
+# @name schedule
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSED
+
+### Preparar agenda e erro para o contrato
+# @injectVariables
+PUT {{baseUrl}}/_simulator/scenarios/contract-process
+Content-Type: application/json
+
+{
+  "contractStatuses": [
+    "Cancelled"
+  ]
+}
+
+?? status == 200
+
+### Preparacao explicita - 09 - Solicitar contrato parcial de 500 na primeira UR
+# @name contract
+# @injectVariables
+{{
+  exports.acquirer = schedule.data.scheduleQueryData.acquirers[0].cnpj;
+  exports.arrangement = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].code;
+  exports.settlementDate = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].settlementDate;
+  exports.freeBefore = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount;
+  exports.expectedFreeAfter = exports.freeBefore - requestedAmount;
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/contract.json
+
+?? status == 201
+
+### Preparacao explicita - 10 - Processar contrato e entregar agenda antecipada via webhook
+# @name processContract
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+
+### Criar e processar contrato com erro
+GET {{root}}/contracts/by-external-reference?contractorCnpj={{merchant.data.cnpj}}&externalReference={{contract.data[0].externalReference}}
+
+?? status == 200
+?? body data.status == 2
+
+### Confirmar que o contrato cancelado nao debitou a agenda
+# @name afterCancellation
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? js response.parsedBody.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount == {{freeBefore}}
+
+### Remover o erro e voltar ao sucesso padrao
+DELETE {{baseUrl}}/_simulator/scenarios/contract-process?merchantCnpj={{cnpj}}
+
+?? status == 200
+
+### Antecipar parcialmente a mesma UR depois do contrato cancelado
+# @name successfulContract
+# @injectVariables
+{{
+  exports.financierId = financierId + '-retry';
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/contract.json
+
+?? status == 201
+
+### Registrar o contrato com sucesso e atualizar agenda automaticamente
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Conferir o valor realmente antecipado
+GET {{root}}/contracts/by-external-reference?contractorCnpj={{cnpj}}&externalReference={{successfulContract.data[0].externalReference}}
+
+?? status == 200
+?? body data.status == 1
+?? js response.parsedBody.data.reachedGuarantees[0].acquirers[0].paymentArrangements[0].receivableUnits[0].reachedAmount == {{requestedAmount}}
+
+### Conferir debito parcial automatico, sem solicitar refresh
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? js response.parsedBody.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount == {{expectedFreeAfter}}

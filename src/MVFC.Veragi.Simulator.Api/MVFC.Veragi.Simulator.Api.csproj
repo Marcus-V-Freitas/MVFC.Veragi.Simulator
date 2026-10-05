@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	
+  <ItemGroup>
+    <ProjectReference Include="../MVFC.Veragi.Simulator.Domain/MVFC.Veragi.Simulator.Domain.csproj" />
+    <ProjectReference Include="../MVFC.Veragi.Simulator.IoC/MVFC.Veragi.Simulator.IoC.csproj" />
+    <ProjectReference Include="../MVFC.Veragi.Simulator.Shareable/MVFC.Veragi.Simulator.Shareable.csproj" />
+  </ItemGroup>
+	
+  <ItemGroup>
+	  <Content Include="../../specifications/swagger.json" Link="specifications/swagger.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,296 @@
+openapi: "3.0.1"
+info:
+  title: "APIs de Webhook Veragi"
+  description: >
+    Especificações de Webhook utilizadas pela plataforma Veragi para notificar parceiros externos.
+
+    Este documento descreve o endpoint HTTP POST que DEVE ser exposto pelo parceiro
+    para receber notificações de **agenda de recebíveis de cartão** (resultados de consultas assíncronas de agenda).
+  contact:
+    name: "Time Veragi"
+    url: "https://veragi.accesstage.com.br"
+    email: "dev@accesstage.com.br"
+  license:
+    name: "Proprietária"
+    url: "https://www.accesstage.com.br"
+  version: "1.0.0"
+
+servers:
+  - url: "https://partner.example.com"
+    description: "Ambiente de webhook do parceiro (substitua pela URL base real)."
+
+tags:
+  - name: "Recebíveis de Cartão - Webhooks de Agenda"
+    description: >
+      Endpoints de webhook utilizados pela Veragi para enviar resultados assíncronos de
+      **consulta de agenda** (agenda de recebíveis de cartão) para parceiros externos.
+
+paths:
+  /webhooks/card-receivables/schedules/updated:
+    post:
+      tags:
+        - "Recebíveis de Cartão - Webhooks de Agenda"
+      summary: "Receber notificação de webhook de agenda de recebíveis"
+      description: |
+        A Veragi envia **resultados assíncronos de consulta de agenda**
+        (agenda de recebíveis de cartão) para este endpoint de webhook
+        após o processamento de uma solicitação de consulta de agenda.
+
+        O parceiro deve expor este endpoint e tratar os dados recebidos.
+
+        **Uso típico:**
+        - Persistir os dados da agenda recebidos em `scheduleQueryData`.
+        - Utilizar o `idRequisicao` para correlacionar com a solicitação original no lado do parceiro (quando aplicável).
+        - Utilizar o campo `status` para determinar se a agenda foi obtida com sucesso
+          (`PROCESSED`), se ainda está sendo processada (`PROCESSING`), ou se não pôde ser obtida (`ERROR`).
+
+        **Idempotência:**
+        - O cabeçalho `Idempotency-Key` identifica de forma única **cada evento de webhook entregue**.
+        - Uma mesma consulta de agenda (`idRequisicao`) pode gerar **múltiplos eventos de webhook ao longo do tempo**,
+          conforme os dados da agenda forem sendo atualizados pela registradora de recebíveis
+          (por exemplo, por processos de interoperabilidade da registradora, como a CERC).
+        - Para um mesmo `idRequisicao`, cada novo evento legítimo será entregue com um
+          **novo `Idempotency-Key`**, calculado com base no conteúdo do payload do webhook.
+        - Tentativas de reenvio do **mesmo evento** reutilizarão exatamente o mesmo `Idempotency-Key`.
+        - O parceiro DEVE tratar chamadas repetidas com a mesma `Idempotency-Key`
+          como idempotentes e evitar a duplicação de efeitos colaterais.
+
+        **Confirmação de recebimento:**
+        Os parceiros DEVEM retornar uma resposta 2xx após aceitar ou
+        enfileirar com sucesso o evento para processamento interno.
+
+        **Autenticação:**
+        Requer um Token Bearer obtido via OAuth2 (fluxo Client Credentials),
+        utilizando o Client ID e o Client Secret fornecidos.
+      operationId: "receiveScheduleUpdatedWebhook"
+      parameters:
+        - name: "Idempotency-Key"
+          in: "header"
+          required: true
+          description: |
+            Identificador único para o evento do webhook.
+
+            - Deve ser tratado como uma **chave de idempotência**.
+            - Se a mesma chave for recebida mais de uma vez, o parceiro DEVE garantir
+              que o processamento do evento não seja duplicado.
+          schema:
+            type: "string"
+            format: "uuid"
+          example: "81e0e0ed-c970-5831-8844-4b60dc7964e9"
+      requestBody:
+        required: true
+        description: "Payload do webhook de agenda com o status da consulta e os dados da agenda."
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleWebhookNotification"
+            examples:
+              ScheduleWebhookProcessed:
+                summary: "Agenda processada com sucesso"
+                description: "Exemplo de webhook quando a consulta de agenda foi totalmente processada."
+                value:
+                  status: "PROCESSED"
+                  detalhe: "A solicitação de consulta de agenda foi processada com sucesso."
+                  dadosConsultaAgenda:
+                    idRequisicao: "31871a08-5d99-4e01-877f-7efb2804e84d"
+                    tipoOrigem: "ONLINE"
+                    dataHoraAtualizacao: "2025-11-04T13:21:37Z"
+                    cnpjEstabelecimento: "23399607000191"
+                    credenciadoras:
+                      - cnpj: "82413081000116"
+                        arranjosPagamento:
+                          - codigo: "ACC"
+                            unidadesRecebiveis:
+                              - cnpjTitular: "23399607000191"
+                                dataVencimento: "2025-11-01"
+                                valorTotal: 7303.62
+                                valorLivre: 0.0
+                              - cnpjTitular: "23399607000191"
+                                dataVencimento: "2025-11-02"
+                                valorTotal: 6342.42
+                                valorLivre: 0.0
+                          - codigo: "DCC"
+                            unidadesRecebiveis:
+                              - cnpjTitular: "23399607000191"
+                                dataVencimento: "2025-11-01"
+                                valorTotal: 3033.35
+                                valorLivre: 3033.35
+                          - codigo: "VCC"
+                            unidadesRecebiveis: []
+              ScheduleWebhookError:
+                summary: "Erro na recuperação da agenda"
+                description: "Exemplo de webhook quando a agenda não pôde ser obtida."
+                value:
+                  status: "ERROR"
+                  detalhe: "Não foi possível recuperar a agenda do registrador de recebíveis."
+                  dadosConsultaAgenda:
+                    idRequisicao: "58bd86ff-6b68-41c8-a318-37873fcbf609"
+                    tipoOrigem: "ONLINE"
+                    dataHoraAtualizacao: "2025-11-18T08:01:46Z"
+                    cnpjEstabelecimento: "23399607000191"
+                    credenciadoras: null
+      responses:
+        "200":
+          description: "Webhook recebido e processado com sucesso."
+        "204":
+          description: "Webhook recebido com sucesso (nenhum conteúdo retornado)."
+        "default":
+          description: |
+            **Política de Retry Ativada:** Qualquer código de resposta diferente de 200 ou 204
+            (por exemplo, 4xx ou 5xx) será tratado como falha de entrega.
+
+            O sistema acionará automaticamente o mecanismo de retry:
+            - 1ª tentativa: após 5 minutos
+            - 2ª tentativa: após 10 minutos
+            - 3ª tentativa: após 15 minutos
+            - Persistência: mensagem enviada para a Dead Letter Queue (DLQ).
+      security:
+        - OAuth2Bearer: []
+
+components:
+  securitySchemes:
+    OAuth2Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Utilize o token obtido via Client ID e Client Secret."
+
+  schemas:
+    ScheduleWebhookNotification:
+      description: >
+        Payload enviado pela Veragi para notificar o parceiro sobre o status e resultado
+        de uma solicitação de consulta de agenda.
+      type: "object"
+      required:
+        - status
+        - detalhe
+        - dadosConsultaAgenda
+      properties:
+        status:
+          $ref: "#/components/schemas/ScheduleQueryStatusType"
+        detalhe:
+          type: "string"
+          description: "Mensagem detalhada descrevendo o status atual da solicitação de consulta de agenda."
+          example: "A solicitação de consulta de agenda foi processada com sucesso."
+        dadosConsultaAgenda:
+          $ref: "#/components/schemas/ScheduleData"
+
+    ScheduleData:
+      description: "Dados da agenda retornados pelo registro de recebíveis para uma solicitação de consulta."
+      type: "object"
+      required:
+        - idRequisicao
+        - tipoOrigem
+        - dataHoraAtualizacao
+        - cnpjEstabelecimento
+      properties:
+        idRequisicao:
+          type: "string"
+          format: "uuid"
+          description: >
+            Identificador único da solicitação de consulta de agenda.
+            Uma mesma `requestId` pode estar associada a múltiplos eventos de webhook
+            ao longo do tempo, conforme os dados da agenda forem sendo atualizados
+            pela registradora de recebíveis.
+          example: "31871a08-5d99-4e01-877f-7efb2804e84d"
+        tipoOrigem:
+          $ref: "#/components/schemas/ScheduleQueryOriginType"
+        dataHoraAtualizacao:
+          type: "string"
+          format: "date-time"
+          description: "Timestamp UTC de quando os dados da agenda foram atualizados pela última vez."
+          example: "2025-11-04T13:21:37Z"
+        cnpjEstabelecimento:
+          type: "string"
+          description: "CNPJ do Estabelecimento (14 dígitos ou 12 alfanuméricos + 2 dígitos verificadores). Sem pontuação."
+          example: "23399607000191"
+        credenciadoras:
+          type: "array"
+          description: "Lista de credenciadoras/sub-credenciadoras e seus arranjos de pagamento associados."
+          items:
+            $ref: "#/components/schemas/SchedulePaymentAcquirer"
+
+    ScheduleQueryOriginType:
+      description: >
+        Indica se os dados da agenda foram obtidos através de uma consulta direta (ONLINE)
+        ou do último processamento em lote disponível (BATCH).
+      type: "string"
+      enum:
+        - "ONLINE"
+        - "BATCH"
+      example: "ONLINE"
+
+    ScheduleQueryStatusType:
+      description: "Indica o status atual de processamento da solicitação de consulta de agenda."
+      type: "string"
+      enum:
+        - "PROCESSED"
+        - "PROCESSING"
+        - "ERROR"
+      example: "PROCESSED"
+
+    SchedulePaymentAcquirer:
+      description: "Credenciadora ou sub-credenciadora e seus arranjos de pagamento associados à agenda."
+      type: "object"
+      required:
+        - cnpj
+      properties:
+        cnpj:
+          type: "string"
+          description: "CNPJ da Credenciadora/Sub-credenciadora (14 dígitos). Sem pontuação."
+          example: "82413081000116"
+        arranjosPagamento:
+          type: "array"
+          description: "Lista de arranjos de pagamento (bandeiras/modalidades) associados a esta credenciadora."
+          items:
+            $ref: "#/components/schemas/SchedulePaymentArrangement"
+
+    SchedulePaymentArrangement:
+      description: "Arranjo de pagamento e suas unidades de recebíveis agrupadas por data de liquidação."
+      type: "object"
+      required:
+        - codigo
+      properties:
+        codigo:
+          type: "string"
+          pattern: "^[A-Z]{3}$"
+          description: "Código do arranjo de pagamento no formato `XXX` (três letras maiúsculas)."
+          example: "VCC"
+        unidadesRecebiveis:
+          type: "array"
+          description: "Unidades de recebíveis (valores) associadas a este arranjo de pagamento por data de liquidação."
+          items:
+            $ref: "#/components/schemas/ScheduleReceivableUnit"
+
+    ScheduleReceivableUnit:
+      description: "Valores de recebíveis para uma data de liquidação específica."
+      type: "object"
+      required:
+        - cnpjTitular
+        - dataVencimento
+        - valorTotal
+        - valorLivre
+      properties:
+        cnpjTitular:
+          type: "string"
+          description: "CNPJ do Titular (14 dígitos). Sem pontuação."
+          example: "23399607000191"
+        dataVencimento:
+          type: "string"
+          format: "date"
+          description: "Data de liquidação no formato ISO 8601 (aaaa-MM-dd)."
+          example: "2025-11-01"
+        valorTotal:
+          type: "number"
+          multipleOf: 0.01
+          minimum: 0
+          description: "Valor total em BRL dos recebíveis agendados para esta data."
+          example: 7303.62
+        valorLivre:
+          type: "number"
+          multipleOf: 0.01
+          minimum: 0
+          description: "Valor livre (não onerado) em BRL dos recebíveis para esta data."
+          example: 0.0
+      
+      

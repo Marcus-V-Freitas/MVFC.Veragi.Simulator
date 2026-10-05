@@ -1,0 +1,1 @@
+{ "contractorCnpj": "{{cnpj}}", "financierContractId": "{{financierId}}", "signatureDate": "{{today}}", "requestedAmount": {{requestedAmount}}, "guarantees": {{guaranteesJson}} }

@@ -1,0 +1,52 @@
+# @import ../common.http
+
+### 01 - Cadastrar estabelecimento para validar o contrato de entrada
+# @name merchant
+# @injectVariables
+{{
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ../payloads/merchant.json
+
+?? status == 201
+
+### 02 - Rejeitar numero em queryType, cujo contrato exige texto
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule-numeric-type.json
+
+?? status == 400
+
+### 03 - Solicitar agenda com STANDARD e receber identificador UUID v7
+# @name submitted
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule.json
+
+?? status == 202
+?? js response.parsedBody.data.requestId.split('-')[2][0] == 7
+
+### 04 - Consultar a mesma agenda usando o UUID v7 retornado
+GET {{root}}/schedules/query-requests/{{submitted.data.requestId}}
+
+?? status == 200
+?? js response.parsedBody.data.scheduleQueryData.requestId == {{submitted.data.requestId}}
+
+### 05 - Rejeitar uma versao de UUID fora das aceitas para consulta
+GET {{root}}/schedules/query-requests/11111111-1111-5111-8111-111111111111
+
+?? status == 400
+
+### 06 - Remover estabelecimento criado pelo cenario
+DELETE {{root}}/merchants/{{cnpj}}
+
+?? status == 204

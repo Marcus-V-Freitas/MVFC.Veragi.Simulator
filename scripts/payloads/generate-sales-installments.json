@@ -1,0 +1,19 @@
+{
+  "sales": [
+    {
+      "externalId": "venda-manual",
+      "acquirerCnpj": "{{acquirer}}",
+      "paymentArrangementCode": "{{arrangement}}",
+      "installments": [
+        {
+          "amount": 150.75,
+          "settlementBusinessDays": 5
+        },
+        {
+          "amount": 99.25,
+          "settlementDate": "{{settlementDate}}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "scheduleUrl": "{{workerBaseUrl}}/webhooks/card-receivables/schedules/updated",
+  "contractUrl": "{{workerBaseUrl}}/webhooks/card-receivable/schedules"
+}

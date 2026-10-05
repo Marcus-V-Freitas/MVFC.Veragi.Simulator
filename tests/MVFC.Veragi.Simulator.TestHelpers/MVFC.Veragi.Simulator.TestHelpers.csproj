@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsPackable>false</IsPackable></PropertyGroup>
+  
+	<ItemGroup>
+		<PackageReference Include="Bogus" />
+	    <PackageReference Include="AutoBogus" />
+	    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+	    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+	</ItemGroup>
+	  
+	  <ItemGroup>
+		  <ProjectReference Include="../../src/MVFC.Veragi.Simulator.Domain/MVFC.Veragi.Simulator.Domain.csproj" />
+		  <ProjectReference Include="../../src/MVFC.Veragi.Simulator.Shareable/MVFC.Veragi.Simulator.Shareable.csproj" />
+	  </ItemGroup>
+	  
+    <ItemGroup>
+		<Content Include="../../src/MVFC.Veragi.Simulator.Api/appsettings.json" Link="api-appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+		<Content Include="../../src/MVFC.Veragi.Simulator.Api/appsettings.Development.json" Link="api-appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+	  
+</Project>

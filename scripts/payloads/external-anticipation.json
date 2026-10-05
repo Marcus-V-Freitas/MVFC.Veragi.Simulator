@@ -1,0 +1,1 @@
+{ "acquirerCnpj": "{{acquirer}}", "paymentArrangementCode": "{{arrangement}}", "settlementDate": "{{settlementDate}}", "amount": {{externalAmount}} }

@@ -1,0 +1,297 @@
+# @import ./common.http
+
+### 01 - Resetar os dados do fornecedor antes do fluxo
+POST {{baseUrl}}/_simulator/reset
+
+?? status == 200
+
+### 02 - Cadastrar destinos de agenda e contrato no simulador
+PUT {{baseUrl}}/_simulator/webhooks
+Content-Type: application/json
+
+{
+  "scheduleUrl": "{{workerBaseUrl}}/webhooks/card-receivables/schedules/updated",
+  "contractUrl": "{{workerBaseUrl}}/webhooks/card-receivable/schedules"
+}
+
+?? status == 200
+
+### 03 - Listar credenciadoras
+# @name acquirers
+GET {{root}}/bases-control/acquirers
+
+?? status == 200
+
+### 04 - Listar arranjos
+# @name arrangements
+GET {{root}}/bases-control/payment-arrangements
+
+?? status == 200
+
+### 05 - Cadastrar estabelecimento e definir escopo
+# @name merchant
+# @injectVariables
+{{
+  exports.selectedAcquirerA = acquirers.data[0].cnpj;
+  exports.selectedAcquirerB = acquirers.data[1].cnpj;
+  exports.selectedArrangementA = arrangements.data[0].code;
+  exports.selectedArrangementB = arrangements.data[1].code;
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+  exports.financierId = 'HTTP-' + Date.now();
+  exports.requestedAmount = 500;
+  exports.today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ./payloads/merchant-dynamic.json
+
+?? status == 201
+
+### 06 - Gerar vendas de forma independente
+# @name generateSales
+# @ref merchant
+# @injectVariables
+POST {{baseUrl}}/_simulator/merchants/{{cnpj}}/sales/generate
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/generate-sales-flexible.json
+
+?? status == 201
+
+### 07 - Solicitar agenda; guardar requestId
+# @name submitSchedule
+# @ref generateSales
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/schedule.json
+
+?? status == 202
+
+### 08 - Processar pendencias de agenda no simulador
+# @ref submitSchedule
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### 09 - Consultar explicitamente a agenda solicitada
+# @name schedule
+# @ref submitSchedule
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSED
+
+### 10 - Antecipar 25% de uma UR da agenda, deixando as demais intactas
+# @name contract
+# @ref schedule
+# @injectVariables
+{{
+  const units = schedule.data.scheduleQueryData.acquirers.flatMap(acquirer => acquirer.paymentArrangements.flatMap(arrangement => arrangement.receivableUnits));
+  const freeTotal = units.reduce((sum, unit) => sum + unit.freeAmount, 0);
+  exports.originalAgendaFreeAmount = freeTotal;
+  const originalUnit = units[0].freeAmount;
+  const partial = Math.round(originalUnit * 0.25 * 100) / 100;
+  exports.originalUnitFreeAmount = originalUnit;
+  exports.partialAmount = partial;
+  exports.expectedRemainingAgendaCents = Math.round((freeTotal - partial) * 100);
+  exports.expectedFinalAgendaCents = Math.round((freeTotal - originalUnit) * 100);
+  exports.requestedAmount = partial;
+  exports.expectedRemaining = Math.round((originalUnit - partial) * 100) / 100;
+  exports.acquirer = schedule.data.scheduleQueryData.acquirers[0].cnpj;
+  exports.arrangement = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].code;
+  exports.settlementDate = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].settlementDate;
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/contract.json
+
+?? status == 201
+
+### 11 - Processar pendencias de contrato no simulador
+# @ref contract
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### 12 - Consultar detalhes do contrato parcial
+# @ref contract
+GET {{root}}/contracts/by-external-reference?contractorCnpj={{cnpj}}&externalReference={{contract.data[0].externalReference}}
+
+?? status == 200
+?? body data.status == 1
+?? body data.contractorCnpj == {{cnpj}}
+?? body data.contractType == 2
+?? body data.reachedGuarantees[0].acquirers[0].paymentArrangements[0].receivableUnits[0].reachedAmount == {{partialAmount}}
+
+### 13 - Consultar saldo restante da primeira UR
+# @name remainingSchedule
+# @ref contract
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? js response.parsedBody.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount == {{expectedRemaining}}
+?? js Math.round(response.parsedBody.data.scheduleQueryData.acquirers.flatMap(acquirer => acquirer.paymentArrangements.flatMap(arrangement => arrangement.receivableUnits)).reduce((sum, unit) => sum + unit.freeAmount, 0) * 100) == {{expectedRemainingAgendaCents}}
+?? js Object.is(JSON.stringify(response.parsedBody.data.scheduleQueryData.acquirers.flatMap(acquirer => acquirer.paymentArrangements.flatMap(arrangement => arrangement.receivableUnits)).slice(1)), JSON.stringify(schedule.data.scheduleQueryData.acquirers.flatMap(acquirer => acquirer.paymentArrangements.flatMap(arrangement => arrangement.receivableUnits)).slice(1))) == true
+
+### 14 - Antecipar todo o saldo restante dessa UR
+# @name remainingContract
+# @ref remainingSchedule
+# @injectVariables
+{{
+  exports.requestedAmount = remainingSchedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount;
+  exports.financierId = financierId + '-TOTAL';
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/contract.json
+
+?? status == 201
+
+### 15 - Processar segundo contrato no simulador
+# @ref remainingContract
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### 16 - Consultar contrato que consumiu o saldo restante
+# @ref remainingContract
+GET {{root}}/contracts/by-external-reference?contractorCnpj={{cnpj}}&externalReference={{remainingContract.data[0].externalReference}}
+
+?? status == 200
+?? js response.parsedBody.data.reachedGuarantees[0].acquirers[0].paymentArrangements[0].receivableUnits[0].reachedAmount == {{expectedRemaining}}
+
+### 17 - Consultar agenda atualizada automaticamente; demais URs conservam seus saldos
+# @ref remainingContract
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].freeAmount == 0
+?? js Math.round(response.parsedBody.data.scheduleQueryData.acquirers.flatMap(acquirer => acquirer.paymentArrangements.flatMap(arrangement => arrangement.receivableUnits)).reduce((sum, unit) => sum + unit.freeAmount, 0) * 100) == {{expectedFinalAgendaCents}}
+
+### 18 - Verificar que a politica padrao nega imediatamente
+GET {{baseUrl}}/_simulator/contracts/availability
+
+?? status == 200
+?? body data.mode == IMMEDIATE
+
+### 19 - Tentar antecipar novamente a UR esgotada; nao cria contrato
+# @injectVariables
+{{
+  exports.requestedAmount = 1;
+  exports.financierId = financierId + '-ZERO';
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/contract.json
+
+?? status == 422
+?? body errorCode == INSUFFICIENT_RECEIVABLE_BALANCE
+
+### 20 - Alterar a politica para recusa posterior
+PUT {{baseUrl}}/_simulator/contracts/availability
+Content-Type: application/json
+
+< ./payloads/contract-availability-deferred.json
+
+?? status == 200
+?? body data.mode == DEFERRED
+
+### 21 - Aceitar a solicitacao sem saldo para demonstrar a recusa no processamento
+# @name deniedContract
+# @injectVariables
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ./payloads/contract.json
+
+?? status == 201
+?? body data[0].status == 6
+
+### 22 - Processar recusa no simulador
+# @ref deniedContract
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### 23 - Conferir contrato recusado com status numerico Cancelled
+# @ref deniedContract
+GET {{root}}/contracts/by-external-reference?contractorCnpj={{cnpj}}&externalReference={{deniedContract.data[0].externalReference}}
+
+?? status == 200
+?? body data.status == 2
+
+### 24 - Restaurar o modo padrao para as proximas chamadas
+PUT {{baseUrl}}/_simulator/contracts/availability
+Content-Type: application/json
+
+< ./payloads/contract-availability-immediate.json
+
+?? status == 200
+?? body data.mode == IMMEDIATE
+
+### 25 - Registrar pagamento parcial: rateio automatico para a UR antecipada
+# @injectVariables
+{{
+  exports.reconciliationAmount = partialAmount;
+}}
+POST {{root}}/reconciliation/entry
+Content-Type: application/json
+
+< ./payloads/reconciliation.json
+
+?? status == 201
+
+### 26 - Registrar outro pagamento: completar o rateio da mesma UR
+# @injectVariables
+{{
+  exports.reconciliationAmount = expectedRemaining;
+}}
+POST {{root}}/reconciliation/entry
+Content-Type: application/json
+
+< ./payloads/reconciliation.json
+
+?? status == 201
+
+### 27 - Conferir titular, vencimento, contrato e valor alocado por recebivel
+GET {{baseUrl}}/_simulator/reconciliation/entries?merchantCnpj={{cnpj}}
+
+?? status == 200
+?? js response.parsedBody.length == 2
+?? js response.parsedBody.every(entry => !entry.unallocatedAmount) == true
+?? js response.parsedBody.flatMap(entry => entry.receivables).reduce((sum, unit) => sum + Math.round(unit.amount * 100), 0) / 100 == {{originalUnitFreeAmount}}
+
+### 28 - Listar contratos ativos
+GET {{root}}/contracts?contractorCnpj={{cnpj}}&situation=ACTIVE
+
+?? status == 200
+
+### 29 - Consultar estabelecimento
+GET {{root}}/merchants/{{cnpj}}
+
+?? status == 200
+
+### 30 - Atualizar estabelecimento
+PATCH {{root}}/merchants/{{cnpj}}
+Content-Type: application/json
+
+< ./payloads/patch.json
+
+?? status == 200
+
+### 31 - Remover estabelecimento logicamente
+DELETE {{root}}/merchants/{{cnpj}}
+
+?? status == 204

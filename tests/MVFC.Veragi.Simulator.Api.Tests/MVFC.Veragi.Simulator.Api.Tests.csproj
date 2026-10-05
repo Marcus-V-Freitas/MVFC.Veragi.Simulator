@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.MongoDb" />
+    <PackageReference Include="MongoDB.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MVFC.Veragi.Simulator.Api/MVFC.Veragi.Simulator.Api.csproj" />
+    <ProjectReference Include="../../src/MVFC.Veragi.Simulator.Data/MVFC.Veragi.Simulator.Data.csproj" />
+    <ProjectReference Include="../../src/MVFC.Veragi.Simulator.Domain/MVFC.Veragi.Simulator.Domain.csproj" />
+    <ProjectReference Include="../../src/MVFC.Veragi.Simulator.IoC/MVFC.Veragi.Simulator.IoC.csproj" />
+    <ProjectReference Include="../MVFC.Veragi.Simulator.TestHelpers/MVFC.Veragi.Simulator.TestHelpers.csproj" />
+  </ItemGroup>
+</Project>

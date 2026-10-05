@@ -1,0 +1,90 @@
+# @import ../common.http
+
+### Preparacao explicita - 01 - Cadastrar estabelecimento e definir escopo
+# @name merchant
+# @injectVariables
+{{
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+  exports.financierId = 'HTTP-' + Date.now();
+  exports.requestedAmount = 500;
+  exports.today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ../payloads/merchant.json
+
+?? status == 201
+
+### Preparacao explicita - 02 - Gerar vendas de forma independente; nao dispara webhook
+# @name generateSales
+# @injectVariables
+POST {{baseUrl}}/_simulator/merchants/{{cnpj}}/sales/generate
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/generate-sales.json
+
+?? status == 201
+
+### Preparacao explicita - 05 - Solicitar agenda; guardar requestId
+# @name submitSchedule
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule.json
+
+?? status == 202
+
+### Preparacao explicita - 06 - Aguardar scheduler ou antecipar processamento e entrega do webhook de agenda
+# @name processSchedule
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Preparacao explicita - 08 - Consultar explicitamente a agenda solicitada
+# @name schedule
+GET {{root}}/schedules/query-requests/{{submitSchedule.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSED
+
+### Preparar consulta e chave fixa desta execucao
+# @name originalContract
+# @injectVariables
+{{
+  exports.contractKey = require('crypto').randomUUID();
+  exports.acquirer = schedule.data.scheduleQueryData.acquirers[0].cnpj;
+  exports.arrangement = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].code;
+  exports.settlementDate = schedule.data.scheduleQueryData.acquirers[0].paymentArrangements[0].receivableUnits[0].settlementDate;
+}}
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{contractKey}}
+Content-Type: application/json
+
+< ../payloads/contract.json
+
+?? status == 201
+
+### Mesmo payload e chave
+# @injectVariables
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{contractKey}}
+Content-Type: application/json
+
+< ../payloads/contract.json
+
+?? status == 201
+?? body data[0].externalReference == {{originalContract.data[0].externalReference}}
+
+### Chave igual com outro payload
+POST {{root}}/contracts/anticipation
+Idempotency-Key: {{contractKey}}
+Content-Type: application/json
+
+{ "contractorCnpj": "{{merchant.data.cnpj}}", "financierContractId": "OUTRO", "signatureDate": "{{today}}", "requestedAmount": 600, "guarantees": [{ "receivableUnitHolderCnpj": "{{merchant.data.cnpj}}", "finalUserReceiverCnpj": "{{merchant.data.cnpj}}", "acquirerCnpj": "{{acquirer}}", "paymentArrangementCode": "{{arrangement}}", "settlementDate": "{{settlementDate}}", "definedAmount": 600 }] }
+
+?? status == 409
+

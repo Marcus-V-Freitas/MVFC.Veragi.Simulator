@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/playground/">
+    <Project Path="playground/MVFC.Veragi.Simulator.WebhookWorker/MVFC.Veragi.Simulator.WebhookWorker.csproj" />
+    <Project Path="playground/MVFC.Veragi.Simulator.AppHost/MVFC.Veragi.Simulator.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/MVFC.Veragi.Simulator.Api/MVFC.Veragi.Simulator.Api.csproj" />
+    <Project Path="src/MVFC.Veragi.Simulator.Data/MVFC.Veragi.Simulator.Data.csproj" />
+    <Project Path="src/MVFC.Veragi.Simulator.Domain/MVFC.Veragi.Simulator.Domain.csproj" />
+    <Project Path="src/MVFC.Veragi.Simulator.IoC/MVFC.Veragi.Simulator.IoC.csproj" />
+    <Project Path="src/MVFC.Veragi.Simulator.Shareable/MVFC.Veragi.Simulator.Shareable.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MVFC.Veragi.Simulator.Api.Tests/MVFC.Veragi.Simulator.Api.Tests.csproj" />
+    <Project Path="tests/MVFC.Veragi.Simulator.Data.Tests/MVFC.Veragi.Simulator.Data.Tests.csproj" />
+    <Project Path="tests/MVFC.Veragi.Simulator.Domain.Tests/MVFC.Veragi.Simulator.Domain.Tests.csproj" />
+    <Project Path="tests/MVFC.Veragi.Simulator.IoC.Tests/MVFC.Veragi.Simulator.IoC.Tests.csproj" />
+    <Project Path="tests/MVFC.Veragi.Simulator.Shareable.Tests/MVFC.Veragi.Simulator.Shareable.Tests.csproj" />
+    <Project Path="tests/MVFC.Veragi.Simulator.TestHelpers/MVFC.Veragi.Simulator.TestHelpers.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,4 @@
+{
+  "contractorCnpj": "{{cnpj}}", "financierContractId": "{{financierId}}", "signatureDate": "{{today}}", "requestedAmount": {{requestedAmount}},
+  "guarantees": [{ "receivableUnitHolderCnpj": "{{cnpj}}", "finalUserReceiverCnpj": "{{cnpj}}", "acquirerCnpj": "{{acquirer}}", "paymentArrangementCode": "{{arrangement}}", "settlementDate": "{{settlementDate}}", "definedAmount": {{requestedAmount}} }]
+}

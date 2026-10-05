@@ -1,0 +1,38 @@
+{
+  "cnpj": "{{cnpj}}",
+  "corporateName": "Loja Simulada LTDA",
+  "email": "simulacao@example.com",
+  "mobilePhone": "11987654321",
+  "receivablesScheduleConfig": {
+    "queryWindow": "P6M",
+    "acquirerCnpjs": [
+      "{{selectedAcquirerA}}",
+      "{{selectedAcquirerB}}"
+    ],
+    "arrangementCodes": [
+      "{{selectedArrangementA}}",
+      "{{selectedArrangementB}}"
+    ]
+  },
+  "creditConfigurations": [
+    2
+  ],
+  "limitType": 1,
+  "releaseAccounts": [
+    {
+      "accountType": "CONTA_DEPOSITO_A_VISTA",
+      "bankCode": "341",
+      "ispb": "60746948",
+      "branch": "1234",
+      "account": "1234567890"
+    }
+  ],
+  "anticipationSettlementAccount": {
+    "cnpjRecipient": "{{cnpj}}",
+    "accountType": "CONTA_DEPOSITO_A_VISTA",
+    "bankCode": "341",
+    "ispb": "60746948",
+    "branch": "1234",
+    "account": "1234567890"
+  }
+}

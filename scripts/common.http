@@ -1,0 +1,4 @@
+@baseUrl = http://localhost:5080
+@root = {{baseUrl}}/module/card-receivable
+@workerBaseUrl = http://localhost:5090
+@cnpj = 22185894000174

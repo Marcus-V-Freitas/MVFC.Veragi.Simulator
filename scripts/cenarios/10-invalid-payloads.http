@@ -1,0 +1,25 @@
+# @import ../common.http
+
+### CNPJ invalido
+GET {{root}}/merchants/invalid
+
+?? status == 400
+
+### Catalogo disponivel sem credenciais
+GET {{root}}/bases-control/acquirers
+
+?? status == 200
+
+### Cadastro sem campos obrigatorios
+POST {{root}}/merchants
+Content-Type: application/json
+
+{}
+
+?? status == 400
+
+### Arranjo invalido
+GET {{root}}/bases-control/payment-arrangements?arrangementCode=visa
+
+?? status == 400
+

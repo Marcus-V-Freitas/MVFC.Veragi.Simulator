@@ -1,0 +1,42 @@
+# @import ../common.http
+
+### Preparacao explicita - 01 - Cadastrar estabelecimento e definir escopo
+# @name merchant
+# @injectVariables
+{{
+  exports.cnpj = String(Date.now()).padStart(14, '0');
+  exports.financierId = 'HTTP-' + Date.now();
+  exports.requestedAmount = 500;
+  exports.today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}}
+POST {{root}}/merchants
+Content-Type: application/json
+
+< ../payloads/merchant.json
+
+?? status == 201
+
+### Cadastrar sem gerar vendas e solicitar agenda
+# @name emptyQuery
+# @injectVariables
+POST {{root}}/schedules/query-requests
+Idempotency-Key: {{$guid}}
+Content-Type: application/json
+
+< ../payloads/schedule.json
+
+?? status == 202
+
+### Processar e entregar webhook de agenda vazia
+POST {{baseUrl}}/_simulator/run
+
+?? status == 200
+
+### Consulta explicita deve retornar acquirers vazio
+GET {{root}}/schedules/query-requests/{{emptyQuery.data.requestId}}
+
+?? status == 200
+?? body data.status == PROCESSED
+?? body data.scheduleQueryData.acquirers.length == 0
+
+
