@@ -163,7 +163,7 @@ public sealed class MerchantService(ISimulatorStore store, RequestValidator vali
                 else
                 {
                     foreach (var field in JsonNode.Parse(operation.ToJson())!.AsObject().Where(x => x.Key is not "id" and not "operationType"))
-                        accounts[index]![field.Key] = field.Value?.DeepClone();
+                        accounts[index]![field.Key] = field.Value!.DeepClone();
                 }
             }
         }
