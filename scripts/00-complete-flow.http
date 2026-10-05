@@ -113,6 +113,8 @@ Content-Type: application/json
 < ./payloads/contract.json
 
 ?? status == 201
+?? js /^CON\/[0-9]{8}\/[0-9]{14}\/[0-9]{6}\/[0-9]{6}$/.test(response.parsedBody.data[0].externalReference) == true
+?? body data[0].financierContractId == {{financierId}}
 
 ### 11 - Processar pendencias de contrato no simulador
 # @ref contract

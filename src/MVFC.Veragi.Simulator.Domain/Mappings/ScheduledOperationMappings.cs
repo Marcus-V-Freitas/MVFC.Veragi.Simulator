@@ -1,5 +1,6 @@
 ﻿using MVFC.Veragi.Simulator.Domain.Entities;
 using MVFC.Veragi.Simulator.Shareable.Configuration;
+using MVFC.Veragi.Simulator.Domain.Services.Contracts;
 using MVFC.Veragi.Simulator.Shareable.Enums;
 using MVFC.Veragi.Simulator.Shareable.Extensions;
 using MVFC.Veragi.Simulator.Shareable.Requests.Contracts;
@@ -33,7 +34,7 @@ public static class ScheduledOperationMappings
     )
     {
         var operation = Create("contract", merchantCnpj, idempotencyKey, request.ToJson(), request.Fingerprint(), now, options);
-        operation.ExternalReference = "SIM-" + operation.Id.ToString("N");
+        operation.ExternalReference = ContractIdentifierGenerator.Create(now);
         operation.ResultJson = request.ToDetails(operation.ExternalReference, ContractStatusType.PendingRegistration).ToJson();
 
         return operation;

@@ -18,6 +18,8 @@ public sealed class ContractRegistrationService(ContractBalanceService balances)
     )
     {
         var request = operation.RequestJson.FromJson<ContractAnticipationCreateRequest>()!;
+        var persisted = operation.ResultJson.FromJson<ContractByExternalReference>()!;
+        request = request with { FinancierContractId = request.FinancierContractId ?? persisted.FinancierContractId ?? operation.ExternalReference };
 
         if (status is not ContractStatusType.Active and not ContractStatusType.Settled)
             return request.ToDetails(operation.ExternalReference, status);

@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<ExternalAnticipationService>();
         services.AddScoped<ContractRegistrationService>();
         services.AddScoped<ContractBalanceService>();
+        services.AddScoped<ContractDebtService>();
         services.AddScoped<ContractAvailabilityService>();
         services.AddScoped<MerchantService>();
         services.AddScoped<ScheduleService>();

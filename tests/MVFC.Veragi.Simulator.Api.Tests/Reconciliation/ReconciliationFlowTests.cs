@@ -39,7 +39,7 @@ public sealed class ReconciliationFlowTests(SimulatorFixture fixture) : IClassFi
     {
         // Arrange
         var (initialAgendaId, date) = await PrepareAsync();
-        await ContractAsync(500, date);
+        var reference = await ContractAsync(500, date);
         await _fixture.ProcessAsync("contract");
 
         var entry = new BankReconciliationEntry(
@@ -71,6 +71,7 @@ public sealed class ReconciliationFlowTests(SimulatorFixture fixture) : IClassFi
 
         foreach (var unit in receivables)
         {
+            unit.ExternalReference.Should().Be(reference);
             unit.SettlementDate.Should().Be(date);
             unit.HolderCnpj.Should().Be(Cnpj);
         }
@@ -82,6 +83,10 @@ public sealed class ReconciliationFlowTests(SimulatorFixture fixture) : IClassFi
         (await db.Entries.SingleAsync()).UnallocatedAmount.Should().Be(unmatched);
         (await db.Operations.SingleAsync(operation => operation.Kind == "contract")).SettlementBankAccountCode.Should().Be("9999");
         (await UnitAsync(initialAgendaId)).FreeAmount.Should().Be(500m);
+        var details = await _fixture.Client.GetDataAsync<ContractByExternalReference>(Root + "/contracts/by-external-reference?contractorCnpj=" + Cnpj + "&externalReference=" + reference);
+        details.DebtBalanceAmount.Should().Be(500m - allocated);
+        details.Status.Should().Be(ContractStatusType.Active);
+        details.ReachedGuarantees![0].Acquirers![0].PaymentArrangements![0].ReceivableUnits![0].ReachedAmount.Should().Be(500m);
     }
 
     [Fact]
@@ -89,7 +94,7 @@ public sealed class ReconciliationFlowTests(SimulatorFixture fixture) : IClassFi
     {
         // Arrange
         var (initialAgendaId, date) = await PrepareAsync();
-        await ContractAsync(500, date);
+        var reference = await ContractAsync(500, date);
         await _fixture.ProcessAsync("contract");
 
         var entry = new BankReconciliationEntry(
@@ -131,6 +136,20 @@ public sealed class ReconciliationFlowTests(SimulatorFixture fixture) : IClassFi
         reconciledAmount.Should().Be(500);
         unallocatedAmount.Should().Be(1);
         (await UnitAsync(initialAgendaId)).FreeAmount.Should().Be(500m);
+
+        await using var restarted = new SimulatorWebApplicationFactory(_fixture.ConnectionString, _fixture.DatabaseName);
+        using var client = restarted.CreateClient();
+        var details = await client.GetDataAsync<ContractByExternalReference>(Root + "/contracts/by-external-reference?contractorCnpj=" + Cnpj + "&externalReference=" + reference);
+        details.DebtBalanceAmount.Should().Be(0);
+        details.Status.Should().Be(ContractStatusType.Active);
+        var later = await client.PostAsJsonAsync(Root + "/reconciliation/entry", entry with { EntryId = Guid.CreateVersion7(DateTimeOffset.UtcNow).ToString(), Value = 10 }, JsonExtensions.Options);
+        later.StatusCode.Should().Be(HttpStatusCode.Created);
+        var updatedJournal = (await client.GetFromJsonAsync<IReadOnlyList<ReconciliationEntryResponse>>("/_simulator/reconciliation/entries?merchantCnpj=" + Cnpj, JsonExtensions.Options))!;
+        updatedJournal.Sum(item => item.UnallocatedAmount).Should().Be(11);
+
+        using var scope = restarted.Services.CreateScope();
+        var registered = (await scope.ServiceProvider.GetRequiredService<SimulatorDbContext>().Operations.SingleAsync(operation => operation.Kind == "contract")).ResultJson.FromJson<ContractByExternalReference>()!;
+        registered.DebtBalanceAmount.Should().Be(500);
     }
 
     private async Task<(string InitialAgendaId, string SettlementDate)> PrepareAsync()

@@ -134,7 +134,7 @@ public sealed class ServiceFixture : IDisposable
         Calendar = new BusinessCalendar(Clock, _options);
         SalesService = new(Store, Gate, catalog, Calendar, _options, Clock);
         ScheduleService = new(Store, validator, Gate, _options, Clock);
-        ContractService = new(Store, validator, Gate, new ContractRules(Calendar, _options), _options, Clock, new ContractAvailabilityService(Store, _options, Gate), new ContractBalanceService(Store));
+        ContractService = new(Store, validator, Gate, new ContractRules(Calendar, _options), _options, Clock, new ContractAvailabilityService(Store, _options, Gate), new ContractBalanceService(Store), new ContractDebtService(Store));
         ReconciliationService = new(Store, validator, Gate, Calendar, new ReconciliationAllocationService(Store));
         RoutingService = new(Store, Gate, DeliveryGate);
         Processor = new(Store, Gate, new ScheduleGenerator(Calendar), Clock, _options, ScenarioService, new ContractRegistrationService(new ContractBalanceService(Store)));

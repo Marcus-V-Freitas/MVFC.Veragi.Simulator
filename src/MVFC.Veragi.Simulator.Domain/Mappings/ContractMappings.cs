@@ -15,7 +15,7 @@ public static class ContractMappings
         var request = operation.RequestJson.FromJson<ContractAnticipationCreateRequest>()!;
         var details = operation.ResultJson.FromJson<ContractByExternalReference>()!;
 
-        return new ContractByContractorAndSituation(ExternalReference: operation.ExternalReference, FinancierContractId: request.FinancierContractId ?? operation.ExternalReference, Status: details.Status, ContractorCnpj: request.ContractorCnpj, EffectType: EffectType.OwnershipTransfer, SignatureDate: request.SignatureDate, DueDate: request.Guarantees!.Max(x => x.SettlementDate), GuaranteedLimitAmount: request.RequestedAmount, ReachedAmount: details.ReachedTotal(), UpdatedAmount: details.ReachedTotal());
+        return new ContractByContractorAndSituation(ExternalReference: operation.ExternalReference, FinancierContractId: request.FinancierContractId ?? details.FinancierContractId ?? operation.ExternalReference, Status: details.Status, ContractorCnpj: request.ContractorCnpj, EffectType: EffectType.OwnershipTransfer, SignatureDate: request.SignatureDate, DueDate: request.Guarantees!.Max(x => x.SettlementDate), GuaranteedLimitAmount: request.RequestedAmount, ReachedAmount: details.ReachedTotal(), UpdatedAmount: details.ReachedTotal());
     }
 
     public static decimal ReachedTotal(this ContractByExternalReference details) => (details.ReachedGuarantees ?? []).SelectMany(x => x.Acquirers ?? []).SelectMany(x => x.PaymentArrangements ?? []).SelectMany(x => x.ReceivableUnits ?? []).Sum(x => x.ReachedAmount ?? 0);

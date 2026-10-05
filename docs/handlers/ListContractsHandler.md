@@ -18,17 +18,22 @@ Esta requisição não recebe corpo.
 {
   "data": [
     {
-      "externalReference": "REF-CONTRATO-001",
+      "externalReference": "CON/07237373/21892484000109/051026/120000",
+      "financierContractId": "HTTP-1791216610601-TOTAL",
       "status": 1,
-      "statusDescription": "Ativo",
-      "contractType": 2,
       "contractorCnpj": "22185894000174",
-      "requestedAmount": 2500.00,
-      "reachedAmount": 2500.00
+      "effectType": 1,
+      "signatureDate": "2026-10-05",
+      "dueDate": "2026-11-10",
+      "guaranteedLimitAmount": 2500.00,
+      "reachedAmount": 2500.00,
+      "updatedAmount": 2500.00
     }
   ]
 }
 ```
+
+A listagem mantém a mesma `externalReference` da criação e dos retries. Novos contratos usam CON; registros antigos conservam suas referências persistidas. `financierContractId` preserva o identificador fornecido pelo cliente ou o fallback existente quando omitido.
 
 ## Diagrama
 ```mermaid

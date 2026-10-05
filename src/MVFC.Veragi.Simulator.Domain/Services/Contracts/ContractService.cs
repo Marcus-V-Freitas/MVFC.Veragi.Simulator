@@ -24,7 +24,8 @@ public sealed class ContractService(
     SimulatorOptions options,
     TimeProvider clock,
     ContractAvailabilityService availability,
-    ContractBalanceService balances
+    ContractBalanceService balances,
+    ContractDebtService debt
 )
 {
     private readonly ISimulatorStore _store = store;
@@ -35,6 +36,7 @@ public sealed class ContractService(
     private readonly TimeProvider _clock = clock;
     private readonly ContractAvailabilityService _availability = availability;
     private readonly ContractBalanceService _balances = balances;
+    private readonly ContractDebtService _debt = debt;
 
     public async Task<Result<IReadOnlyList<ContractByContractorAndSituation>>> CreateAsync(
         ContractAnticipationCreateRequest request,
@@ -173,7 +175,11 @@ public sealed class ContractService(
         var operations = await _store.GetOperationsAsync("contract", cnpj, cancellationToken);
         var operation = operations.FirstOrDefault(x => x.ExternalReference == externalReference);
 
-        return operation is null ? Failures.Missing("Contract not found") : Result.Success(operation.ResultJson.FromJson<ContractByExternalReference>()!);
+        if (operation is null)
+            return Failures.Missing("Contract not found");
+
+        var registered = operation.ResultJson.FromJson<ContractByExternalReference>()!;
+        return await _debt.ProjectAsync(cnpj, externalReference, registered, cancellationToken);
     }
 
     public static string UnitKey(ContractAnticipationGuaranteeCreate unit) => string.Join('|', unit.ReceivableUnitHolderCnpj, unit.AcquirerCnpj, unit.PaymentArrangementCode, unit.SettlementDate);
