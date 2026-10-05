@@ -9,6 +9,8 @@ using MVFC.Veragi.Simulator.Domain.Entities;
 using MVFC.Veragi.Simulator.Domain.Mappings;
 using MVFC.Veragi.Simulator.Shareable.Enums;
 using MVFC.Veragi.Simulator.Shareable.Extensions;
+using MVFC.Veragi.Simulator.Shareable.Results;
+using MVFC.Veragi.Simulator.Shareable.Responses.Schedules;
 using MVFC.Veragi.Simulator.TestHelpers;
 using Xunit;
 using MVFC.Veragi.Simulator.Domain.Tests.Infrastructure;
@@ -151,6 +153,87 @@ public sealed class ContractProcessingTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
+        fixture.Store.DidNotReceive().AddOperation(Arg.Any<ScheduledOperationEntity>());
+        await fixture.Store.DidNotReceive().SaveAsync(CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("acquirers")]
+    [InlineData("acquirer-mismatch")]
+    [InlineData("arrangements")]
+    [InlineData("units")]
+    [InlineData("holder")]
+    public async Task ContractCreationRejectsProcessedScheduleWithoutCompleteReceivableHierarchy(string shape)
+    {
+        // Arrange
+        using var fixture = new ServiceFixture();
+        await fixture.PrepareAsync();
+        var operation = fixture.Operations.Single(x => x.Kind == "schedule");
+        var current = operation.ResultJson.FromJson<ScheduleQuery>()!;
+        var contract = fixture.Contract();
+        var guarantee = contract.Guarantees!.Single();
+        var scheduleData = shape switch
+        {
+            "acquirers" => current.ScheduleQueryData! with
+            {
+                Acquirers = null
+            },
+            "acquirer-mismatch" => current.ScheduleQueryData! with
+            {
+                Acquirers = new List<SchedulePaymentAcquirer>
+                {
+                    new(Cnpj: "33185894000174", PaymentArrangements: new List<SchedulePaymentArrangement>
+                    {
+                        new(Code: guarantee.PaymentArrangementCode, ReceivableUnits: new List<ScheduleReceivableUnit>
+                        {
+                            new(SettlementDate: guarantee.SettlementDate, HolderCnpj: guarantee.ReceivableUnitHolderCnpj, TotalAmount: 100, FreeAmount: 100)
+                        })
+                    })
+                }
+            },
+            "arrangements" => current.ScheduleQueryData! with
+            {
+                Acquirers = new List<SchedulePaymentAcquirer>
+                {
+                    new(Cnpj: guarantee.AcquirerCnpj, PaymentArrangements: null)
+                }
+            },
+            "holder" => current.ScheduleQueryData! with
+            {
+                Acquirers = new List<SchedulePaymentAcquirer>
+                {
+                    new(Cnpj: guarantee.AcquirerCnpj, PaymentArrangements: new List<SchedulePaymentArrangement>
+                    {
+                        new(Code: guarantee.PaymentArrangementCode, ReceivableUnits: new List<ScheduleReceivableUnit>
+                        {
+                            new(SettlementDate: guarantee.SettlementDate, HolderCnpj: "33185894000174", TotalAmount: 100, FreeAmount: 100)
+                        })
+                    })
+                }
+            },
+            _ => current.ScheduleQueryData! with
+            {
+                Acquirers = new List<SchedulePaymentAcquirer>
+                {
+                    new(Cnpj: guarantee.AcquirerCnpj, PaymentArrangements: new List<SchedulePaymentArrangement>
+                    {
+                        new(Code: guarantee.PaymentArrangementCode, ReceivableUnits: null)
+                    })
+                }
+            }
+        };
+        operation.ResultJson = (current with
+        {
+            ScheduleQueryData = scheduleData
+        }).ToJson();
+        fixture.Store.ClearReceivedCalls();
+
+        // Act
+        var result = await fixture.ContractService.CreateAsync(contract, ServiceFixture.Key(), CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        ((SimulationFailureException)result.Exception!).Message.Should().Contain("Guarantee must reference a receivable unit");
         fixture.Store.DidNotReceive().AddOperation(Arg.Any<ScheduledOperationEntity>());
         await fixture.Store.DidNotReceive().SaveAsync(CancellationToken.None);
     }

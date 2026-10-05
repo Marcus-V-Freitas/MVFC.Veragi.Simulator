@@ -19,7 +19,7 @@ public sealed class ScheduleGenerator(BusinessCalendar calendar)
 
         if (config.QueryWindow == QueryWindowType.P1Y)
         {
-            horizon = _calendar.Today.AddMonths(config.QueryWindow == QueryWindowType.P6M ? 6 : 12);
+            horizon = _calendar.Today.AddMonths(12);
         }
         else
         {
