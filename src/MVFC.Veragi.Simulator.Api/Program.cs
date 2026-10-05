@@ -17,16 +17,19 @@ foreach (var kind in new[]
 {
     "schedule",
     "contract",
-    "delivery"
+    "delivery",
 }
 
 )
+{
     builder.Services.AddSingleton<IHostedService>(services => new SimulatorScheduler(kind, services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<SimulatorOptions>(), services.GetRequiredService<ILogger<SimulatorScheduler>>()));
+}
+
 var app = builder.Build();
 app.UseExceptionHandler();
 app.MapProviderEndpoints();
 app.MapSimulationEndpoints();
-using (var scope = app.Services.CreateScope())
+await using (var scope = app.Services.CreateAsyncScope())
 {
     await scope.ServiceProvider.GetRequiredService<SimulatorDbContext>().Database.EnsureCreatedAsync();
 }
